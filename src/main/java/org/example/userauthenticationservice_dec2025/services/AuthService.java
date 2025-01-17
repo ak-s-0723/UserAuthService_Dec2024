@@ -1,5 +1,8 @@
 package org.example.userauthenticationservice_dec2025.services;
 
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.MacAlgorithm;
+import org.antlr.v4.runtime.misc.Pair;
 import org.example.userauthenticationservice_dec2025.exceptions.PasswordMismatchException;
 import org.example.userauthenticationservice_dec2025.exceptions.UserAlreadyExistException;
 import org.example.userauthenticationservice_dec2025.exceptions.UserNotRegisteredException;
@@ -10,10 +13,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 
 @Service
@@ -50,7 +52,7 @@ public class AuthService implements IAuthService {
     }
 
     @Override
-    public User login(String email, String password) throws UserNotRegisteredException, PasswordMismatchException {
+    public Pair<User,String> login(String email, String password) throws UserNotRegisteredException, PasswordMismatchException {
         Optional<User> userOptional = userRepo.findByEmail(email);
         if(userOptional.isEmpty()) {
            throw new UserNotRegisteredException("Please signup first");
@@ -62,6 +64,39 @@ public class AuthService implements IAuthService {
           throw new PasswordMismatchException("Please add correct password");
         }
 
-        return userOptional.get();
+        //Generating JWT
+//        String message = "{\n" +
+//                "   \"email\": \"anurag@gmail.com\",\n" +
+//                "   \"roles\": [\n" +
+//                "      \"instructor\",\n" +
+//                "      \"buddy\"\n" +
+//                "   ],\n" +
+//                "   \"expirationDate\": \"2ndApril2025\"\n" +
+//                "}";
+//
+//        byte[] content = message.getBytes(StandardCharsets.UTF_8);
+        //String token = Jwts.builder().content(content).compact();
+
+        Map<String,Object> payload = new HashMap<>();
+        Long nowInMillis = System.currentTimeMillis();
+        payload.put("iat",nowInMillis);
+        payload.put("exp",nowInMillis+100000);
+        payload.put("userId",userOptional.get().getId());
+        payload.put("iss","scaler");
+        payload.put("scope",userOptional.get().getRoles());
+
+        MacAlgorithm algorithm = Jwts.SIG.HS256;
+        SecretKey secretKey = algorithm.key().build();
+        String token = Jwts.builder().claims(payload).signWith(secretKey).compact();
+
+        return new Pair<User,String>(userOptional.get(),token);
     }
+
+    //validateToken(userId, token) {
+        // check if token stored in db is matching with this token or not
+        // whether the token has expired or not ,
+        // currentTimeStamp < expiryTimeStamp
+        //In order to get expiryTimeStamp, we need to parse token and get payload(claims)
+        // -> get expiry.
+    //}
 }
