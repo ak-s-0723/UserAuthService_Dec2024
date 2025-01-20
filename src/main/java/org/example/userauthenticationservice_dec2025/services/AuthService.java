@@ -1,5 +1,7 @@
 package org.example.userauthenticationservice_dec2025.services;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.MacAlgorithm;
 import org.antlr.v4.runtime.misc.Pair;
@@ -7,7 +9,10 @@ import org.example.userauthenticationservice_dec2025.exceptions.PasswordMismatch
 import org.example.userauthenticationservice_dec2025.exceptions.UserAlreadyExistException;
 import org.example.userauthenticationservice_dec2025.exceptions.UserNotRegisteredException;
 import org.example.userauthenticationservice_dec2025.models.Role;
+import org.example.userauthenticationservice_dec2025.models.Session;
+import org.example.userauthenticationservice_dec2025.models.Status;
 import org.example.userauthenticationservice_dec2025.models.User;
+import org.example.userauthenticationservice_dec2025.repos.SessionRepo;
 import org.example.userauthenticationservice_dec2025.repos.UserRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -26,6 +31,14 @@ public class AuthService implements IAuthService {
 
     @Autowired
     private BCryptPasswordEncoder bCryptPasswordEncoder;
+
+
+    @Autowired
+    private SessionRepo sessionRepo;
+
+
+    @Autowired
+    private SecretKey secretKey;
 
     @Override
     public User signup(String email, String password) throws UserAlreadyExistException {
@@ -85,9 +98,15 @@ public class AuthService implements IAuthService {
         payload.put("iss","scaler");
         payload.put("scope",userOptional.get().getRoles());
 
-        MacAlgorithm algorithm = Jwts.SIG.HS256;
-        SecretKey secretKey = algorithm.key().build();
+//        MacAlgorithm algorithm = Jwts.SIG.HS256;
+//        SecretKey secretKey = algorithm.key().build();
         String token = Jwts.builder().claims(payload).signWith(secretKey).compact();
+
+        Session session = new Session();
+        session.setToken(token);
+        session.setUser(userOptional.get());
+        session.setStatus(Status.ACTIVE);
+        sessionRepo.save(session);
 
         return new Pair<User,String>(userOptional.get(),token);
     }
@@ -99,4 +118,30 @@ public class AuthService implements IAuthService {
         //In order to get expiryTimeStamp, we need to parse token and get payload(claims)
         // -> get expiry.
     //}
+
+    public Boolean validateToken(String token,Long userId) {
+      Optional<Session> optionalSession = sessionRepo.findByTokenAndUser_Id(token,userId);
+
+      if(optionalSession.isEmpty()) {
+          return false;
+      }
+
+      JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
+      Claims claims = jwtParser.parseSignedClaims(token).getPayload();
+
+      Long tokenExpiry = (Long) claims.get("exp");
+      Long currentTime = System.currentTimeMillis();
+
+        System.out.println(tokenExpiry);
+        System.out.println(currentTime);
+
+      if(currentTime > tokenExpiry) {
+          Session session = optionalSession.get();
+          session.setStatus(Status.INACTIVE);
+          sessionRepo.save(session);
+          return false;
+      }
+
+      return true;
+    }
 }

@@ -4,7 +4,9 @@ import org.antlr.v4.runtime.misc.Pair;
 import org.example.userauthenticationservice_dec2025.dtos.LoginRequest;
 import org.example.userauthenticationservice_dec2025.dtos.SignupRequest;
 import org.example.userauthenticationservice_dec2025.dtos.UserDto;
+import org.example.userauthenticationservice_dec2025.dtos.ValidateTokenDto;
 import org.example.userauthenticationservice_dec2025.exceptions.PasswordMismatchException;
+import org.example.userauthenticationservice_dec2025.exceptions.UnAuthorizedException;
 import org.example.userauthenticationservice_dec2025.exceptions.UserAlreadyExistException;
 import org.example.userauthenticationservice_dec2025.exceptions.UserNotRegisteredException;
 import org.example.userauthenticationservice_dec2025.models.User;
@@ -50,6 +52,17 @@ public class AuthController {
       }  catch (PasswordMismatchException exception) {
           return new ResponseEntity<>(null,HttpStatus.BAD_REQUEST);
       }
+    }
+
+    @PostMapping("/validateToken")
+    public Boolean validateToken(@RequestBody ValidateTokenDto validateTokenDto) throws UnAuthorizedException {
+        Boolean result = authService.validateToken(validateTokenDto.getToken(), validateTokenDto.getUserId());
+
+        if(result == false) {
+           throw new UnAuthorizedException("Please login again, Inconvenience Regretted");
+        }
+
+        return result;
     }
 
     public UserDto from(User user) {
